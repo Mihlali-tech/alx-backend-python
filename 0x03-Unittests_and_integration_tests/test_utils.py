@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Tests for utils module: access_nested_map, get_json, and memoize functions.
 """
