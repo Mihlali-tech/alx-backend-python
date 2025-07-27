@@ -1,3 +1,7 @@
+"""
+Tests for utils module: access_nested_map, get_json, and memoize functions.
+"""
+
 #!/usr/bin/env python3
 import unittest
 from parameterized import parameterized
@@ -32,7 +36,10 @@ class TestGetJson(unittest.TestCase):
         mock_response = Mock()
         mock_response.json.return_value = expected_payload
 
-        with patch('utils.requests.get', return_value=mock_response) as mock_get:
+        with patch(
+            'utils.requests.get',
+            return_value=mock_response
+        ) as mock_get:
             result = get_json(test_url)
             mock_get.assert_called_once_with(test_url)
             self.assertEqual(result, expected_payload)
@@ -49,7 +56,9 @@ class TestMemoize(unittest.TestCase):
                 return self.a_method()
 
         test_obj = TestClass()
-        with patch.object(TestClass, 'a_method', return_value=42) as mock_method:
+        with patch.object(
+            TestClass, 'a_method', return_value=42
+        ) as mock_method:
             result1 = test_obj.a_property
             result2 = test_obj.a_property
             self.assertEqual(result1, 42)
