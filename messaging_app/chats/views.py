@@ -1,14 +1,19 @@
-from rest_framework import viewsets, status, filters
+from rest_framework import viewsets, permissions, status, filters
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer
 from .permissions import IsParticipantOfConversation
+from django_filters.rest_framework import DjangoFilterBackend
+from .pagination import MessagePagination
+from .filters import MessageFilter
+
 
 class ConversationViewSet(viewsets.ModelViewSet):
     queryset = Conversation.objects.all()
     serializer_class = ConversationSerializer
-    permission_classes = [IsParticipantOfConversation]
+    permission_classes = [permissions.IsAuthenticated, IsParticipantOfConversation]
     filter_backends = [filters.SearchFilter]
     search_fields = ['participants__email']
 
@@ -18,25 +23,26 @@ class ConversationViewSet(viewsets.ModelViewSet):
         conversation.save()
 
     def get_queryset(self):
-        # Limit conversations to those the user participates in
+        # Restrict conversations to those the user participates in
         return Conversation.objects.filter(participants=self.request.user)
+
 
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
-    permission_classes = [IsParticipantOfConversation]
-    filter_backends = [filters.OrderingFilter]
+    permission_classes = [permissions.IsAuthenticated, IsParticipantOfConversation]
+    pagination_class = MessagePagination
+    filter_backends = [filters.OrderingFilter, DjangoFilterBackend]
     ordering_fields = ['sent_at']
+    filterset_class = MessageFilter
 
     def get_queryset(self):
         conversation_id = self.request.query_params.get('conversation_id')
         if not conversation_id:
-            return Message.objects.none()  # No conversation_id -> no messages
+            return Message.objects.none()
         conversation = get_object_or_404(Conversation, id=conversation_id)
 
-        # Check if user is participant - if not, forbid
         if self.request.user not in conversation.participants.all():
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied(detail="You do not have permission to view messages in this conversation.")
+            raise PermissionDenied("You do not have permission to view messages in this conversation.")
 
         return Message.objects.filter(conversation=conversation)
 
@@ -44,9 +50,10 @@ class MessageViewSet(viewsets.ModelViewSet):
         conversation_id = self.request.data.get('conversation_id')
         conversation = get_object_or_404(Conversation, id=conversation_id)
 
-        # Check user is participant before sending
         if self.request.user not in conversation.participants.all():
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied(detail="You cannot send messages to a conversation you are not part of.")
+            return Response(
+                {"detail": "You cannot send messages to a conversation you are not part of."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         serializer.save(sender=self.request.user, conversation=conversation)
